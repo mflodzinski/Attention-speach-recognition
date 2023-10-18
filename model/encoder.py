@@ -7,15 +7,11 @@ class Encoder(nn.Module):
     Encoder module for a Neural Transducer.
 
     Args:
-        input_size (int): The dimension of the input data.
-        hidden_state_size (int): The dimension of the hidden state in the RNN.
+        input_size (int): The size of the input data.
+        hidden_size (int): The dimension of the hidden state in the RNN.
         num_layers (int, optional): The number of recurrent layers.
-        rnn_type (str, optional): The type of RNN.
-        dropout (float, optional): The dropout rate to apply within the RNN layers.
-        bidirectional (bool, optional): Whether to use bidirectional RNN layers.
-
-    Methods:
-        forward(input_seq): Forward pass through the encoder.
+        rnn_type (str, optional): The type of RNN cell to use.
+        dropout (float, optional): Dropout rate for the RNN layers.
     """
 
     supported_rnns = {
@@ -27,30 +23,40 @@ class Encoder(nn.Module):
     def __init__(
         self,
         input_size: int,
-        hidden_state_size: int,
+        hidden_size: int,
         num_layers: int = 2,
         rnn_type: str = "lstm",
         dropout: float = 0.1,
-        bidirectional: bool = True,
     ):
         super(Encoder, self).__init__()
-        self.hidden_state_size = hidden_state_size
-        rnn_cell = self.supported_rnns[rnn_type.lower()]
+        self.input_size = input_size
+        self.hidden_size = hidden_size
+
         self.dropout = nn.Dropout(dropout)
+        rnn_cell = self.supported_rnns[rnn_type.lower()]
 
         self.rnn = rnn_cell(
             input_size,
-            hidden_state_size,
+            hidden_size,
             num_layers,
             dropout=dropout,
             batch_first=True,
-            bidirectional=bidirectional,
         )
 
-    def forward(self, input_seq: torch.Tensor):
-        output, (hidden, cell) = self.rnn(input_seq)
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Forward pass of the Encoder.
+
+        Args:
+            x: Input data of shape (batch_size, sequence_length, input_size).
+
+        Returns:
+            - encoder output: The output sequence from the Encoder.
+            - hidden state: The final hidden state of the Encoder.
+        """
+        output, hidden = self.rnn(x)
         output = self.dropout(output)
-        return output, hidden, cell
+        return output, hidden
 
 
 if __name__ == "__main__":
