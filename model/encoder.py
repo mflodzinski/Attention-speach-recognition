@@ -1,10 +1,10 @@
-import torch
 import torch.nn as nn
+from torch import Tensor
 
 
 class Encoder(nn.Module):
     """
-    Encoder module for a Neural Transducer.
+    Encoder module for a RNN-Transducer.
 
     Args:
         input_size (int): The size of the input data.
@@ -29,21 +29,18 @@ class Encoder(nn.Module):
         dropout: float = 0.1,
     ):
         super(Encoder, self).__init__()
-        self.input_size = input_size
         self.hidden_size = hidden_size
-
-        self.dropout = nn.Dropout(dropout)
         rnn_cell = self.supported_rnns[rnn_type.lower()]
 
         self.rnn = rnn_cell(
             input_size,
             hidden_size,
             num_layers,
-            dropout=dropout,
+            dropout=dropout if num_layers > 1 else 0,
             batch_first=True,
         )
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    def forward(self, x: Tensor) -> Tensor:
         """
         Forward pass of the Encoder.
 
@@ -51,18 +48,8 @@ class Encoder(nn.Module):
             x: Input data of shape (batch_size, sequence_length, input_size).
 
         Returns:
-            - encoder output: The output sequence from the Encoder.
-            - hidden state: The final hidden state of the Encoder.
+            - output: The output sequence from the Encoder.
+            - hidden: The final hidden state of the Encoder.
         """
         output, hidden = self.rnn(x)
-        output = self.dropout(output)
         return output, hidden
-
-
-if __name__ == "__main__":
-    input_size = 80
-    hidden_size = 256
-
-    encoder = Encoder(input_size, hidden_size)
-    input_sequence = torch.randn(32, 100, input_size)
-    output, hidden, cell = encoder(input_sequence)

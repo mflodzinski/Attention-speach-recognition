@@ -1,0 +1,18 @@
+# TODO
+
+- train
+- repair forward()
+
+# IN PROGRESS
+
+- include Attention -> check if everything ok and clean
+
+# DONE
+
+- how does `_joint` work
+- whether or not include `output_dim` (maybe only if bidirectional)
+- what is batch
+- clean, check and understand
+- check all sizes and write them
+
+# END
