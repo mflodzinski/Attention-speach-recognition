@@ -1,7 +1,9 @@
 # TODO
 
-- train
+- data loader
+- config file
 - repair forward()
+- train
 
 # IN PROGRESS
 

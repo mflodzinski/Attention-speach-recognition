@@ -1,11 +1,34 @@
 import torch
 import torch.nn as nn
 from torch import Tensor
+
+# from warprnnt_pytorch import RNNTLoss
 import torch.nn.functional as F
 
 from encoder import Encoder
 from decoder import Decoder
 from attention import BahdanauAttention, LuongAttention
+
+
+class JointNet(nn.Module):
+    def __init__(self, input_size, num_classes):
+        super(JointNet, self).__init__()
+        self.fc = nn.Linear(input_size, num_classes, bias=False)
+
+    def forward(self, encoder_features, decoder_features):
+        """
+        Combine encoder and decoder features and pass through a linear layer.
+
+        Args:
+            encoder_features: Features from the encoder
+            decoder_features: Features from the decoder
+
+        Returns:
+            outputs: Joint output features
+        """
+        outputs = torch.cat((encoder_features, decoder_features), dim=-1)
+        outputs = self.fc(outputs)
+        return outputs
 
 
 class RNNTransducer(nn.Module):
@@ -44,11 +67,12 @@ class RNNTransducer(nn.Module):
         rnn_type: str = "lstm",
         encoder_dropout: float = 0.2,
         decoder_dropout: float = 0.2,
-        attn_win_size: int = 10,
+        win_size: int = 10,
     ):
         super(RNNTransducer, self).__init__()
         self.num_classes = num_classes
-        self.win_size = attn_win_size
+        self.win_size = win_size
+
         self.encoder = Encoder(
             input_size=input_size,
             hidden_size=encoder_hidden_size,
@@ -63,25 +87,8 @@ class RNNTransducer(nn.Module):
             rnn_type=rnn_type,
             dropout=decoder_dropout,
         )
-        self.fc = nn.Linear(
-            encoder_hidden_size + decoder_hidden_size, num_classes, bias=False
-        )
+        self.joint = JointNet(decoder_hidden_size + encoder_hidden_size, num_classes)
         self.attn = LuongAttention(encoder_hidden_size, decoder_hidden_size)
-
-    def _joint(self, encoder_features: Tensor, decoder_features: Tensor) -> Tensor:
-        """
-        Combine encoder and decoder features and pass through a linear layer.
-
-        Args:
-            encoder_features: Features from the encoder
-            decoder_features: Features from the decoder
-
-        Returns:
-            outputs: Joint output features
-        """
-        outputs = torch.cat((encoder_features, decoder_features), dim=-1)
-        outputs = self.fc(outputs)
-        return outputs
 
     def forward(
         self,
@@ -102,11 +109,11 @@ class RNNTransducer(nn.Module):
         """
         encoder_features = self.encoder(inputs)
         decoder_features, hidden_state = self.decoder(outputs, hidden_state)
-        outputs = self._joint(encoder_features, decoder_features)
+        outputs = self.joint(encoder_features, decoder_features)
         return outputs, hidden_state
 
     @torch.no_grad()
-    def _decode(self, encoder_output: Tensor, max_length: int) -> Tensor:
+    def decode(self, encoder_output: Tensor, max_length: int) -> Tensor:
         token_list = []
         bos_token = torch.LongTensor([[self.decoder.sos_id]])
         decoder_output, hidden_state = self.decoder(bos_token)
@@ -129,7 +136,7 @@ class RNNTransducer(nn.Module):
 
         for _ in range(self.win_size):
             context = self.attn(decoder_output, window)
-            step_output = self._joint(context.view(-1), decoder_output.view(-1))
+            step_output = self.joint(context.view(-1), decoder_output.view(-1))
             step_output = step_output.softmax(dim=0)
             pred_token = step_output.argmax(dim=0)
             pred_token = int(pred_token.item())
@@ -171,7 +178,7 @@ class RNNTransducer(nn.Module):
         max_length = encoder_outputs.size(1)
 
         for encoder_output in encoder_outputs:
-            decoded_seq = self._decode(encoder_output, max_length)
+            decoded_seq = self.decode(encoder_output, max_length)
             token_list.append(decoded_seq)
 
         token_list = torch.stack(token_list, dim=1).transpose(0, 1)

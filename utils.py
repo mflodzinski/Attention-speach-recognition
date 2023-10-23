@@ -1,26 +1,50 @@
 import os
+import pandas as pd
 
 
-def get_all_file_paths(directory):
-    file_paths = []
-    for root, _, files in os.walk(directory):
-        for filename in files:
-            filepath = os.path.join(root, filename)
-            file_paths.append(filepath)
-
-    return file_paths
+def transform_string(text):
+    text = text.lower()
+    text = "".join(char if char.isalpha() or char.isspace() else "" for char in text)
+    text = text.replace(" ", "_")
+    return text
 
 
-def save_file_paths(directory, save_path):
-    file_paths = get_all_file_paths(directory)
-    with open(save_path, "w") as f:
-        for file_path in file_paths:
-            f.write(file_path + "\n")
+def extract_data(input_csv_path, output_csv_path):
+    df = pd.read_csv(input_csv_path)
+    data_dir = os.path.dirname(input_csv_path)
+
+    audio_paths = []
+    texts = []
+    durations = []
+
+    for _, row in df.iterrows():
+        path_from_data_dir = row["path_from_data_dir"]
+
+        if path_from_data_dir.endswith(".WAV"):
+            wav_path = data_dir + "/" + path_from_data_dir
+            txt_path = wav_path.replace(".WAV", ".TXT")
+
+            if os.path.exists(txt_path):
+                with open(txt_path, "r") as text_file:
+                    content = text_file.read().split(" ")
+                    end_time = float(content[1]) / 16000
+                    text = " ".join(content[2:]).strip()
+                    text = transform_string(text)
+
+                audio_paths.append(wav_path)
+                texts.append(text)
+                durations.append(end_time)
+
+    new_df = pd.DataFrame(
+        {"audio_path": audio_paths, "text": texts, "duration": durations}
+    )
+    new_df.to_csv(output_csv_path, index=False)
 
 
 if __name__ == "__main__":
-    directory = "preprocessed_data"
-    train_file_paths = "preprocessed_data/train_paths.txt"
-    test_file_paths = "preprocessed_data/test_paths.txt"
-    save_file_paths(directory, train_file_paths)
-    save_file_paths(directory, test_file_paths)
+    path_to_train_csv = "data/train_data.csv"
+    path_to_test_csv = "data/test_data.csv"
+    train_file_paths = "preprocessed_data/train.csv"
+    test_file_paths = "preprocessed_data/test.csv"
+    extract_data(path_to_train_csv, train_file_paths)
+    extract_data(path_to_test_csv, test_file_paths)
