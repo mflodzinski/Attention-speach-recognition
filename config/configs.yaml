@@ -1,9 +1,9 @@
-checkpoint: null
-device: "cuda"
+checkpoint: "checkpoints/20231026-723.pt"
+device: "cpu"
 length_multiplier: 1.05
 
 tokenizer:
-  tokenizer_file: null
+  tokenizer_file: "files/tokenizer.json"
   vocab_path: "files/vocab.txt"
 
 data:
@@ -15,35 +15,36 @@ data:
   testing_file: "files/test.csv"
   max_str_len: 250
   descending_order: False
-  sep: "|"
+  sep: "_"
   csv_file_keys:
     duration: "duration"
-    path: "path"
+    path: "audio_path"
     text: "text"
 
 training:
   checkpoints_dir: "checkpoints"
   batch_size: 8
   optimizer: "sgd"
-  epochs: 200
+  epochs: 7
   optim:
-    learning_rate: 0.01
+    learning_rate: 0.05
     momentum: 0.9
 
 model:
-  pred_net:
+  decoder:
     emb_dim: 512
     hidden_size: 256
     n_layers: 2
     dropout: 0.1
+    rnn_type: "lstm"
 
-  trans_net:
+  encoder:
     input_size: ${data.n_mel_channels}
-    hidden_size: 128 # half pred_net hidden_size if bidirectional
     n_layers: 2
     dropout: 0.1
     is_bidirectional: true
+    hidden_size: 128 # half pred_net hidden_size if bidirectional
+    rnn_type: "lstm"
 
-  join_net:
-    input_size: ${model.pred_net.hidden_size}
-    mode: "add" # add or mul
+  joint:
+    input_size: ${model.decoder.hidden_size}
