@@ -1,4 +1,4 @@
-checkpoint: "checkpoints/20231026-723.pt"
+checkpoint: null
 device: "cpu"
 length_multiplier: 1.05
 
@@ -25,7 +25,7 @@ training:
   checkpoints_dir: "checkpoints"
   batch_size: 8
   optimizer: "sgd"
-  epochs: 7
+  epochs: 2
   optim:
     learning_rate: 0.05
     momentum: 0.9

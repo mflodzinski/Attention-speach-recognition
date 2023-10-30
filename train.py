@@ -12,6 +12,7 @@ from loss import Loss
 from tqdm import tqdm
 import torch
 import os
+from torchaudio.functional import rnnt_loss
 
 OPT = {"sgd": torch.optim.SGD}
 
@@ -100,7 +101,7 @@ class Trainer:
             # result = result.reshape(-1, result.shape[-1])
             # y = y.reshape(-1)
             # y = torch.squeeze(y)
-            # print(self.tokenizer.ids2tokens(result[0].argmax(dim=-1).tolist()))
+            print(self.tokenizer.ids2tokens(result[0].argmax(dim=-1).tolist()))
             loss = self.criterion(result, y, lengths)
             total_loss += loss.item()
         total_loss /= len(self.test_loader)
@@ -115,17 +116,17 @@ class Trainer:
         total_loss = 0
         self.set_train_mode()
 
-        for inputs, targets, lengths in tqdm(self.train_loader):
+        for inputs, targets, targets_len in tqdm(self.train_loader):
             inputs, targets = inputs.to(self.device), targets.to(self.device)
             max_sequence_length = int(inputs.shape[1] * self.length_multiplier)
             inputs = torch.squeeze(inputs, dim=1)
 
             self.optimizer.zero_grad()
             output_probs = self.model(inputs, max_sequence_length)
-
-            loss = self.criterion(output_probs, targets, lengths)
+            print(self.tokenizer.ids2tokens(output_probs[0].argmax(dim=-1).tolist()))
+            loss = self.criterion(output_probs, targets, targets_len)
             # print(output_probs.size(), targets.size(), lengths.size())
-
+            print(loss)
             torch.nn.utils.clip_grad_norm_(self.model.parameters(), 1)
             loss.backward()
             self.optimizer.step()

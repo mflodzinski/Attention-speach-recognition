@@ -95,7 +95,6 @@ class DataLoader(BaseData):
         args = self.df[hprams.data.csv_file_keys.text].iloc[start_idx:end_idx]
         lengths = [len(x) + 1 for x in args.values]
         result = torch.stack([self._get_padded_tokens(text) for text in args], dim=0)
-        print(result)
         return result, torch.IntTensor(lengths)
 
     def __iter__(self):
