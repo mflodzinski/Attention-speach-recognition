@@ -6,7 +6,6 @@ from math import ceil
 from encoder import Encoder
 from decoder import Decoder
 from joint import Joint
-from attention import LuongAttention, BahdanauAttention
 
 
 class Model(nn.Module):
@@ -23,11 +22,6 @@ class Model(nn.Module):
     - `device`: The device to run the model on.
     """
 
-    available_attn = {
-        "luong": LuongAttention,
-        "bahdanau": BahdanauAttention,
-    }
-
     def __init__(
         self,
         decoder_params: dict,
@@ -36,68 +30,83 @@ class Model(nn.Module):
         phi_idx: int,
         pad_idx: int,
         sos_idx: int,
-        win_size: int = 2,
         device: str = "cuda",
-        attn: str = "luong",
     ) -> None:
         super().__init__()
         self.decoder = Decoder(**decoder_params).to(device)
         self.encoder = Encoder(**encoder_params).to(device)
         self.joint = Joint(**joint_params).to(device)
         self.device = device
-        self.win_size = win_size
         self.phi_idx = phi_idx
         self.pad_idx = pad_idx
         self.sos_idx = sos_idx
 
-        is_bidirectional = encoder_params["is_bidirectional"] + 1
-        attn_cell = self.available_attn[attn.lower()]
-        self.attn = attn_cell(
-            encoder_hidden_size=encoder_params["hidden_size"] * is_bidirectional,
-            decoder_hidden_size=decoder_params["hidden_size"],
-        )
-
-    def forward(self, x: Tensor, max_length: int) -> Tensor:
+    def forward(
+        self,
+        inputs: Tensor,
+        input_lengths: Tensor,
+        targets: Tensor,
+        target_lengths: Tensor,
+    ) -> Tensor:
         """
-        Forward pass of the model for sequence generation.
+        Forward propagate a `inputs` and `targets` pair for training.
 
         Args:
-        - `x`: The input tensor of shape (B, sequence_length, input_size).
-        - `max_length`: The maximum length for sequence generation.
+            inputs (torch.FloatTensor): A input sequence passed to encoder. Typically for inputs this will be a padded
+                `FloatTensor` of size ``(batch, seq_length, dimension)``.
+            input_lengths (torch.LongTensor): The length of input tensor. ``(batch)``
+            targets (torch.LongTensr): A target sequence passed to decoder. `IntTensor` of size ``(batch, seq_length)``
+            target_lengths (torch.LongTensor): The length of target tensor. ``(batch)``
 
         Returns:
-        - `Tensor`: The output tensor of the generated sequence.
+            * predictions (torch.FloatTensor): Result of model predictions.
         """
-        batch_size, sequence_length, *_ = x.shape
-        counter = self.init_counter(batch_size, sequence_length)
-        counter_limit = self.init_counter_limit(batch_size, sequence_length)
-        prev_preds = self.init_prev_preds(batch_size)
+        encoder_outputs, _ = self.encoder(inputs, input_lengths)
+        decoder_outputs, _ = self.decoder(targets, target_lengths)
+        outputs = self.joint(encoder_outputs, decoder_outputs)
+        return outputs
 
-        enc_outs = self.encoder(x)
-        enc_outs = enc_outs.reshape(batch_size * sequence_length, -1)
-        h, c = self.decoder.get_zeros_hidden_state(batch_size, self.device)
+    # def forward(self, x: Tensor, max_length: int) -> Tensor:
+    #     """
+    #     Forward pass of the model for sequence generation.
 
-        t = 0
-        result = None
+    #     Args:
+    #     - `x`: The input tensor of shape (B, sequence_length, input_size).
+    #     - `max_length`: The maximum length for sequence generation.
 
-        while True:
-            preds, h, c = self.predict_next(prev_preds, h, c, counter, enc_outs)
-            curr_preds = torch.argmax(preds, dim=-1)
-            prev_preds = self.overwrite_preds(prev_preds, curr_preds)
-            counter, terminate_mask = self.update_states(
-                curr_preds, counter, counter_limit
-            )
-            if t == 0:
-                result = preds
-            else:
-                result = torch.cat([result, preds], dim=1)
+    #     Returns:
+    #     - `Tensor`: The output tensor of the generated sequence.
+    #     """
+    #     batch_size, sequence_length, *_ = x.shape
+    #     counter = self.init_counter(batch_size, sequence_length)
+    #     counter_limit = self.init_counter_limit(batch_size, sequence_length)
+    #     prev_preds = self.init_prev_preds(batch_size)
 
-            t += 1
-            if (terminate_mask.sum().item() == batch_size) or (max_length == t):
-                print(terminate_mask.sum().item() == batch_size)
-                break
+    #     enc_outs = self.encoder(x)
+    #     enc_outs = enc_outs.reshape(batch_size * sequence_length, -1)
+    #     h, c = self.decoder.get_zeros_hidden_state(batch_size, self.device)
 
-        return result
+    #     t = 0
+    #     result = None
+
+    #     while True:
+    #         preds, h, c = self.predict_next(prev_preds, h, c, counter, enc_outs)
+    #         curr_preds = torch.argmax(preds, dim=-1)
+    #         prev_preds = self.overwrite_preds(prev_preds, curr_preds)
+    #         counter, terminate_mask = self.update_states(
+    #             curr_preds, counter, counter_limit
+    #         )
+    #         if t == 0:
+    #             result = preds
+    #         else:
+    #             result = torch.cat([result, preds], dim=1)
+
+    #         t += 1
+    #         if (terminate_mask.sum().item() == batch_size) or (max_length == t):
+    #             print(terminate_mask.sum().item() == batch_size)
+    #             break
+
+    #     return result
 
     def overwrite_preds(self, prev_preds, curr_preds):
         """

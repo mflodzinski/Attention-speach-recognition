@@ -5,7 +5,7 @@ from torch import Tensor
 from pathlib import Path
 from typing import List, Union, Tuple
 from hprams import hprams
-from torchaudio.transforms import Resample, MelSpectrogram
+from torchaudio.transforms import Resample, MFCC
 import torchaudio
 
 
@@ -29,7 +29,7 @@ class BaseData:
         aud = self.prepare_audio(aud_path)
         n = max_len - aud.shape[1]
         zeros = torch.zeros(size=(1, n, aud.shape[-1]))
-        return torch.cat([zeros, aud], dim=1)
+        return torch.cat([zeros, aud], dim=1), aud.shape[1]
 
     def _get_padded_tokens(self, text: str) -> Tensor:
         text = self.prepare_text(text)
@@ -47,8 +47,9 @@ class BaseData:
     def prepare_audio(self, audio_path: Union[str, Path]) -> Tensor:
         x, sr = torchaudio.load(audio_path, normalize=True)
         x = Resample(sr, hprams.data.sampling_rate)(x)
-        x = MelSpectrogram(
-            hprams.data.sampling_rate, n_mels=hprams.data.n_mel_channels
+        x = MFCC(
+            n_mfcc=12,
+            melkwargs={"n_fft": 400, "hop_length": 200, "n_mels": 23, "center": False},
         )(x)
         x = x.permute(0, 2, 1)
         return x
@@ -84,17 +85,21 @@ class DataLoader(BaseData):
 
     def get_audios(self, start_idx: int, end_idx: int) -> Tensor:
         max_duration = self.get_max_duration(start_idx, end_idx)
-        result = [
+        results = [
             self._get_padded_aud(path, max_duration)
             for path in self.df[hprams.data.csv_file_keys.path].iloc[start_idx:end_idx]
         ]
+        result, lengths = [t[0] for t in results], [t[1] for t in results]
+        print(lengths)
         result = torch.stack(result, dim=1)
-        return torch.squeeze(result)
+
+        return torch.squeeze(result), torch.IntTensor(lengths)
 
     def get_texts(self, start_idx: int, end_idx: int) -> Tuple[Tensor, torch.IntTensor]:
         args = self.df[hprams.data.csv_file_keys.text].iloc[start_idx:end_idx]
-        lengths = [len(x) + 1 for x in args.values]
+        lengths = [len(x) for x in args.values]
         result = torch.stack([self._get_padded_tokens(text) for text in args], dim=0)
+        print(lengths)
         return result, torch.IntTensor(lengths)
 
     def __iter__(self):
@@ -103,4 +108,4 @@ class DataLoader(BaseData):
             start = self.idx * self.batch_size
             end = min((self.idx + 1) * self.batch_size, self.num_examples)
             self.idx += 1
-            yield self.get_audios(start, end), *self.get_texts(start, end)
+            yield *self.get_audios(start, end), *self.get_texts(start, end)

@@ -12,7 +12,7 @@ from loss import Loss
 from tqdm import tqdm
 import torch
 import os
-from torchaudio.functional import rnnt_loss
+from warprnnt_numba import RNNTLossNumba
 
 OPT = {"sgd": torch.optim.SGD}
 
@@ -116,15 +116,18 @@ class Trainer:
         total_loss = 0
         self.set_train_mode()
 
-        for inputs, targets, targets_len in tqdm(self.train_loader):
+        for inputs, inputs_len, targets, targets_len in tqdm(self.train_loader):
             inputs, targets = inputs.to(self.device), targets.to(self.device)
-            max_sequence_length = int(inputs.shape[1] * self.length_multiplier)
+            max_sequence_length = torch.tensor(
+                int(inputs.shape[1] * self.length_multiplier)
+            )
             inputs = torch.squeeze(inputs, dim=1)
 
             self.optimizer.zero_grad()
-            output_probs = self.model(inputs, max_sequence_length)
-            print(self.tokenizer.ids2tokens(output_probs[0].argmax(dim=-1).tolist()))
-            loss = self.criterion(output_probs, targets, targets_len)
+            output_probs = self.model(inputs, inputs_len, targets, targets_len)
+            print(output_probs.size())
+            print(self.tokenizer.ids2tokens(output_probs[0].argmax(dim=-1)))
+            loss = self.criterion(output_probs, inputs_len, targets, targets_len)
             # print(output_probs.size(), targets.size(), lengths.size())
             print(loss)
             torch.nn.utils.clip_grad_norm_(self.model.parameters(), 1)
@@ -186,7 +189,7 @@ def get_trainer():
     vocab_size = tokenizer.vocab_size()
     train_loader = get_data_loader(hprams.data.training_file, tokenizer)
     test_loader = get_data_loader(hprams.data.testing_file, tokenizer)
-    criterion = Loss(phi_idx)
+    criterion = RNNTLossNumba(blank=0, reduction="mean", fastemit_lambda=0.001)
     model = load_model(vocab_size, pad_idx=pad_idx, phi_idx=phi_idx, sos_idx=sos_idx)
     optimizer = OPT[hprams.training.optimizer](
         model.parameters(),

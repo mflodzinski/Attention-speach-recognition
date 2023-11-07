@@ -50,11 +50,41 @@ class Decoder(nn.Module):
         )
 
     def forward(
-        self, x: Tensor, hn: Tensor, cn: Tensor
-    ) -> Tuple[Tensor, Tensor, Tensor]:
-        out = self.emb(x)
-        out, (hn, cn) = self.rnn(out, (hn, cn))
-        return out, hn, cn
+        self,
+        inputs: Tensor,
+        input_lengths: Tensor = None,
+        hidden_states: Tensor = None,
+    ) -> Tuple[Tensor, Tensor]:
+        """
+        Forward propage a `inputs` (targets) for training.
+
+        Args:
+            inputs (torch.LongTensor): A target sequence passed to decoder. `IntTensor` of size ``(batch, seq_length)``
+            input_lengths (torch.LongTensor): The length of input tensor. ``(batch)``
+            hidden_states (torch.FloatTensor): A previous hidden state of decoder. `FloatTensor` of size
+                ``(batch, seq_length, dimension)``
+
+        Returns:
+            (Tensor, Tensor):
+
+            * decoder_outputs (torch.FloatTensor): A output sequence of decoder. `FloatTensor` of size
+                ``(batch, seq_length, dimension)``
+            * hidden_states (torch.FloatTensor): A hidden state of decoder. `FloatTensor` of size
+                ``(batch, seq_length, dimension)``
+        """
+        embedded = self.emb(inputs)
+
+        if input_lengths is not None:
+            embedded = nn.utils.rnn.pack_padded_sequence(
+                embedded.transpose(0, 1),
+                input_lengths.cpu(),
+                enforce_sorted=False,
+            )
+            outputs, hidden_states = self.rnn(embedded, hidden_states)
+            outputs, _ = nn.utils.rnn.pad_packed_sequence(outputs)
+        else:
+            outputs, hidden_states = self.rnn(embedded, hidden_states)
+        return outputs.permute(1, 0, 2), hidden_states
 
     def get_zeros_hidden_state(
         self, batch_size: int, device: str
