@@ -39,7 +39,14 @@ class CharTokenizer:
 
     def ids2tokens(self, ids):
         oov_key = self.special_tokens[self._oov_key][0]
-        return [self._id_to_token.get(id, oov_key) for id in ids]
+        tokens = []
+
+        # Iterate over rows and columns
+        for row_ids in ids:
+            row_tokens = [self._id_to_token.get(id.item(), oov_key) for id in row_ids]
+            tokens.append(row_tokens)
+
+        return tokens
 
     def tokens2ids(self, sentence):
         oov_id = self.special_tokens[self._oov_key][1]

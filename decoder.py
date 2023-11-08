@@ -73,7 +73,7 @@ class Decoder(nn.Module):
                 ``(batch, seq_length, dimension)``
         """
         embedded = self.emb(inputs)
-
+        input_lengths = input_lengths.add(1)
         if input_lengths is not None:
             embedded = nn.utils.rnn.pack_padded_sequence(
                 embedded.transpose(0, 1),

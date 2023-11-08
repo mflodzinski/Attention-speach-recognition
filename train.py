@@ -8,11 +8,10 @@ from typing import Callable, Union
 from torch.nn import Module
 from functools import wraps
 from hprams import hprams
-from loss import Loss
 from tqdm import tqdm
 import torch
 import os
-from warprnnt_numba import RNNTLossNumba
+import warprnnt_numba
 
 OPT = {"sgd": torch.optim.SGD}
 
@@ -125,13 +124,14 @@ class Trainer:
 
             self.optimizer.zero_grad()
             output_probs = self.model(inputs, inputs_len, targets, targets_len)
-            print(output_probs.size())
-            print(self.tokenizer.ids2tokens(output_probs[0].argmax(dim=-1)))
-            loss = self.criterion(output_probs, inputs_len, targets, targets_len)
-            # print(output_probs.size(), targets.size(), lengths.size())
+            print(output_probs[0].argmax(dim=-1))
+
+            loss = self.criterion(
+                output_probs, targets.to(torch.int32), inputs_len, targets_len
+            )
             print(loss)
             torch.nn.utils.clip_grad_norm_(self.model.parameters(), 1)
-            loss.backward()
+            loss.mean().backward()
             self.optimizer.step()
             total_loss += loss.item()
 
@@ -189,7 +189,9 @@ def get_trainer():
     vocab_size = tokenizer.vocab_size()
     train_loader = get_data_loader(hprams.data.training_file, tokenizer)
     test_loader = get_data_loader(hprams.data.testing_file, tokenizer)
-    criterion = RNNTLossNumba(blank=0, reduction="mean", fastemit_lambda=0.001)
+    criterion = warprnnt_numba.RNNTLossNumba(
+        blank=0, reduction="mean", fastemit_lambda=0.001
+    )
     model = load_model(vocab_size, pad_idx=pad_idx, phi_idx=phi_idx, sos_idx=sos_idx)
     optimizer = OPT[hprams.training.optimizer](
         model.parameters(),

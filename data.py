@@ -32,8 +32,10 @@ class BaseData:
         return torch.cat([zeros, aud], dim=1), aud.shape[1]
 
     def _get_padded_tokens(self, text: str) -> Tensor:
+        sos_idx = self.tokenizer.special_tokens[self.tokenizer._sos_key][1]
         text = self.prepare_text(text)
         tokens = self.tokenizer.tokens2ids(text)
+        tokens = [sos_idx] + tokens
         eos_idx = self.tokenizer.special_tokens[self.tokenizer._eos_key][1]
         tokens.append(eos_idx)
         length = self.max_len - len(tokens)
@@ -57,7 +59,7 @@ class BaseData:
     def prepare_text(self, text: str) -> str:
         text = text.lower()
         text = text.replace(" ", "_")
-        text = "".join(char if char.isalpha() else "" for char in text)
+        text = "".join(char if char.isalpha() or char == "_" else "" for char in text)
         text = text.strip()
         return text
 
@@ -90,7 +92,6 @@ class DataLoader(BaseData):
             for path in self.df[hprams.data.csv_file_keys.path].iloc[start_idx:end_idx]
         ]
         result, lengths = [t[0] for t in results], [t[1] for t in results]
-        print(lengths)
         result = torch.stack(result, dim=1)
 
         return torch.squeeze(result), torch.IntTensor(lengths)
@@ -99,7 +100,6 @@ class DataLoader(BaseData):
         args = self.df[hprams.data.csv_file_keys.text].iloc[start_idx:end_idx]
         lengths = [len(x) for x in args.values]
         result = torch.stack([self._get_padded_tokens(text) for text in args], dim=0)
-        print(lengths)
         return result, torch.IntTensor(lengths)
 
     def __iter__(self):
