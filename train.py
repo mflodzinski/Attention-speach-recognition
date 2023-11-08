@@ -130,8 +130,9 @@ class Trainer:
                 output_probs, targets.to(torch.int32), inputs_len, targets_len
             )
             print(loss)
-            torch.nn.utils.clip_grad_norm_(self.model.parameters(), 1)
             loss.mean().backward()
+            torch.nn.utils.clip_grad_norm_(self.model.parameters(), 1)
+
             self.optimizer.step()
             total_loss += loss.item()
 
