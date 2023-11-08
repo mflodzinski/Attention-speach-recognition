@@ -13,7 +13,7 @@ data:
   n_ftt: 400
   training_file: "files/train.csv"
   testing_file: "files/test.csv"
-  max_str_len: 250
+  max_str_len: 100
   descending_order: False
   sep: "_"
   csv_file_keys:
