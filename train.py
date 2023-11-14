@@ -11,7 +11,8 @@ from hprams import hprams
 from tqdm import tqdm
 import torch
 import os
-import warprnnt_numba
+from warp_rnnt import rnnt_loss
+from search import GreedyDecode
 
 OPT = {"sgd": torch.optim.SGD}
 
@@ -66,8 +67,8 @@ class Trainer:
         data then test it on the test set and then log the results
         """
         for _ in range(self.epochs):
-            self.train()
-            # self.test()
+            #self.train()
+            self.test()
             self.print_results()
 
     def set_train_mode(self) -> None:
@@ -91,18 +92,25 @@ class Trainer:
         """
         total_loss = 0
         self.set_test_mode()
-        for x, y, lengths in tqdm(self.test_loader):
-            x = x.to(self.device)
-            y = y.to(self.device)
-            max_len = int(x.shape[1] * self.length_multiplier)
-            x = torch.squeeze(x, dim=1)
-            result = self.model(x, max_len)
-            # result = result.reshape(-1, result.shape[-1])
-            # y = y.reshape(-1)
-            # y = torch.squeeze(y)
-            print(self.tokenizer.ids2tokens(result[0].argmax(dim=-1).tolist()))
-            loss = self.criterion(result, y, lengths)
-            total_loss += loss.item()
+        for x, x_len, y, ylen in tqdm(self.test_loader):
+            x = x.to(self.device); x_len = x_len.to(self.device)
+            print(y.size())
+            #print(self.tokenizer.ids2tokens(y.tolist()))
+            search = GreedyDecode(self.model, x, x_len) 
+            search = self.tokenizer.ids2tokens(search)
+            words = ["".join(a) for a in search]
+            for i in words:
+                print(i)
+            # y = y.to(self.device)
+            # max_len = int(x.shape[1] * self.length_multiplier)
+            # x = torch.squeeze(x, dim=1)
+            # result = self.model(x, max_len)
+            # # result = result.reshape(-1, result.shape[-1])
+            # # y = y.reshape(-1)
+            # # y = torch.squeeze(y)
+            # print(self.tokenizer.ids2tokens(result[0].argmax(dim=-1).tolist()))
+            #loss = self.criterion(result, y, lengths)
+            # total_loss += loss.item()
         total_loss /= len(self.test_loader)
         if self.__test_loss_key in self.history:
             self.history[self.__test_loss_key].append(total_loss)
@@ -117,24 +125,26 @@ class Trainer:
 
         for inputs, inputs_len, targets, targets_len in tqdm(self.train_loader):
             inputs, targets = inputs.to(self.device), targets.to(self.device)
-            max_sequence_length = torch.tensor(
-                int(inputs.shape[1] * self.length_multiplier)
-            )
+            inputs_len, targets_len = inputs_len.to(self.device), targets_len.to(self.device)
             inputs = torch.squeeze(inputs, dim=1)
-
+                
             self.optimizer.zero_grad()
             output_probs = self.model(inputs, inputs_len, targets, targets_len)
-            print(output_probs[0].argmax(dim=-1))
+            print(output_probs.size)
+            a = output_probs.argmax(dim=-1)
+            print(a.size())
 
             loss = self.criterion(
-                output_probs, targets.to(torch.int32), inputs_len, targets_len
+                output_probs, targets, inputs_len, targets_len
             )
+
             print(loss)
+            print(loss.mean())
             loss.mean().backward()
-            torch.nn.utils.clip_grad_norm_(self.model.parameters(), 1)
+            torch.nn.utils.clip_grad_norm_(self.model.parameters(), 8)
 
             self.optimizer.step()
-            total_loss += loss.item()
+            total_loss += loss.mean().item()
 
         total_loss /= len(self.train_loader)
 
@@ -190,9 +200,7 @@ def get_trainer():
     vocab_size = tokenizer.vocab_size()
     train_loader = get_data_loader(hprams.data.training_file, tokenizer)
     test_loader = get_data_loader(hprams.data.testing_file, tokenizer)
-    criterion = warprnnt_numba.RNNTLossNumba(
-        blank=0, reduction="mean", fastemit_lambda=0.001
-    )
+    criterion = rnnt_loss
     model = load_model(vocab_size, pad_idx=pad_idx, phi_idx=phi_idx, sos_idx=sos_idx)
     optimizer = OPT[hprams.training.optimizer](
         model.parameters(),

@@ -29,19 +29,21 @@ class BaseData:
         aud = self.prepare_audio(aud_path)
         n = max_len - aud.shape[1]
         zeros = torch.zeros(size=(1, n, aud.shape[-1]))
+
         return torch.cat([zeros, aud], dim=1), aud.shape[1]
 
-    def _get_padded_tokens(self, text: str) -> Tensor:
+    def _get_padded_tokens(self, text: str, max_len:int) -> Tensor:
+        #max_len +=1
         sos_idx = self.tokenizer.special_tokens[self.tokenizer._sos_key][1]
         text = self.prepare_text(text)
         tokens = self.tokenizer.tokens2ids(text)
-        tokens = [sos_idx] + tokens
+        #tokens = [sos_idx] + tokens
         eos_idx = self.tokenizer.special_tokens[self.tokenizer._eos_key][1]
-        tokens.append(eos_idx)
-        length = self.max_len - len(tokens)
+        #tokens.append(eos_idx)
+        length = max_len - len(tokens)
         pad_idx = self.tokenizer.special_tokens[self.tokenizer._pad_key][1]
         tokens = tokens + [pad_idx] * length
-        return torch.LongTensor(tokens)
+        return torch.IntTensor(tokens)
 
     def prepocess_lines(self, data: str) -> List[str]:
         return [item.split(hprams.data.sep) for item in data]
@@ -50,8 +52,8 @@ class BaseData:
         x, sr = torchaudio.load(audio_path, normalize=True)
         x = Resample(sr, hprams.data.sampling_rate)(x)
         x = MFCC(
-            n_mfcc=12,
-            melkwargs={"n_fft": 400, "hop_length": 200, "n_mels": 23, "center": False},
+            n_mfcc=25,
+            melkwargs={"n_fft": 400, "hop_length": 200, "n_mels": 32, "center": False},
         )(x)
         x = x.permute(0, 2, 1)
         return x
@@ -84,6 +86,12 @@ class DataLoader(BaseData):
 
     def get_max_duration(self, start_idx: int, end_idx: int) -> float:
         return self.df[hprams.data.csv_file_keys.duration].iloc[start_idx:end_idx].max()
+    
+    def get_max_text_length(self, start_idx: int, end_idx: int) -> int:
+        texts = self.df[hprams.data.csv_file_keys.text].iloc[start_idx:end_idx]
+        max_length = max(len(str(text)) for text in texts)
+        return max_length
+
 
     def get_audios(self, start_idx: int, end_idx: int) -> Tensor:
         max_duration = self.get_max_duration(start_idx, end_idx)
@@ -99,8 +107,9 @@ class DataLoader(BaseData):
     def get_texts(self, start_idx: int, end_idx: int) -> Tuple[Tensor, torch.IntTensor]:
         args = self.df[hprams.data.csv_file_keys.text].iloc[start_idx:end_idx]
         lengths = [len(x) for x in args.values]
-        result = torch.stack([self._get_padded_tokens(text) for text in args], dim=0)
-        return result, torch.IntTensor(lengths)
+        max_len = self.get_max_text_length(start_idx, end_idx)
+        result = torch.stack([self._get_padded_tokens(text, max_len) for text in args], dim=0)
+        return result.to(torch.int32), torch.IntTensor(lengths)
 
     def __iter__(self):
         self.idx = 0

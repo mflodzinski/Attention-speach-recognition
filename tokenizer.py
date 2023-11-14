@@ -43,7 +43,7 @@ class CharTokenizer:
 
         # Iterate over rows and columns
         for row_ids in ids:
-            row_tokens = [self._id_to_token.get(id.item(), oov_key) for id in row_ids]
+            row_tokens = [self._id_to_token.get(id, oov_key) for id in row_ids]
             tokens.append(row_tokens)
 
         return tokens

@@ -61,10 +61,11 @@ class Encoder(nn.Module):
             * output_lengths (torch.LongTensor): The length of output tensor. ``(batch)``
         """
         inputs = nn.utils.rnn.pack_padded_sequence(
-            inputs.transpose(0, 1),
+            inputs,
             input_lengths.cpu(),
             enforce_sorted=False,
+            batch_first=True,
         )
-        outputs, hidden_states = self.rnn(inputs)
-        outputs, _ = nn.utils.rnn.pad_packed_sequence(outputs)
-        return outputs.permute(1, 0, 2), input_lengths
+        outputs, _ = self.rnn(inputs)
+        outputs, _ = nn.utils.rnn.pad_packed_sequence(outputs, batch_first=True)
+        return outputs, input_lengths

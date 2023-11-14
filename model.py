@@ -6,7 +6,7 @@ from math import ceil
 from encoder import Encoder
 from decoder import Decoder
 from joint import Joint
-
+import torch.nn.functional as F
 
 class Model(nn.Module):
     """
@@ -62,8 +62,10 @@ class Model(nn.Module):
             * predictions (torch.FloatTensor): Result of model predictions.
         """
         encoder_outputs, _ = self.encoder(inputs, input_lengths)
-        decoder_outputs, _ = self.decoder(targets, target_lengths)
+        concat_targets = F.pad(targets, pad=(1, 0, 0, 0), value=3)
+        decoder_outputs, _ = self.decoder(concat_targets, target_lengths.add(1))
         outputs = self.joint(encoder_outputs, decoder_outputs)
+        outputs = torch.nn.functional.log_softmax(outputs, dim=-1)
         return outputs
 
     # def forward(self, x: Tensor, max_length: int) -> Tensor:

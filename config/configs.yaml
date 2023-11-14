@@ -1,5 +1,5 @@
-checkpoint: null
-device: "cpu"
+checkpoint: 'checkpoints/final.pt'
+device: "cuda"
 length_multiplier: 1.05
 
 tokenizer:
@@ -8,7 +8,7 @@ tokenizer:
 
 data:
   sampling_rate: 16000
-  n_mel_channels: 12
+  n_mel_channels: 25
   hop_length: 200
   n_ftt: 400
   training_file: "files/train.csv"
@@ -23,9 +23,9 @@ data:
 
 training:
   checkpoints_dir: "checkpoints"
-  batch_size: 8
+  batch_size: 12
   optimizer: "sgd"
-  epochs: 2
+  epochs: 100
   optim:
     learning_rate: 0.01
     momentum: 0.9
@@ -33,18 +33,18 @@ training:
 model:
   decoder:
     emb_dim: 64
-    hidden_size: 128
-    n_layers: 2
+    hidden_size: 256
+    n_layers: 1
     dropout: 0.1
     rnn_type: "lstm"
 
   encoder:
     input_size: ${data.n_mel_channels}
-    n_layers: 2
+    n_layers: 4
     dropout: 0.1
     is_bidirectional: True
-    hidden_size: 64 # half pred_net hidden_size if bidirectional
+    hidden_size: 128 # half pred_net hidden_size if bidirectional
     rnn_type: "lstm"
 
   joint:
-    input_size: ${model.decoder.hidden_size}
+    input_size: 512
