@@ -30,15 +30,9 @@ class Joint(nn.Module):
             * outputs (torch.FloatTensor): outputs of joint `encoder_outputs` and `decoder_outputs`..
         """ 
         if encoder_outputs.dim() == 3 and decoder_outputs.dim() == 3:
-            input_length = encoder_outputs.size(1)
-            target_length = decoder_outputs.size(1)
+            encoder_outputs.unsqueeze_(dim=2)
+            decoder_outputs.unsqueeze_(dim=1)
 
-            encoder_outputs = encoder_outputs.unsqueeze(2)
-            decoder_outputs = decoder_outputs.unsqueeze(1)
-
-            encoder_outputs = encoder_outputs.repeat([1, 1, target_length, 1])
-            decoder_outputs = decoder_outputs.repeat([1, input_length, 1, 1])
-
-        outputs = torch.cat((encoder_outputs, decoder_outputs), dim=-1)
+        outputs = encoder_outputs + decoder_outputs
         outputs = self.fc(outputs)
         return outputs

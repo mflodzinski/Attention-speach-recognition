@@ -27,6 +27,7 @@ class Encoder(nn.Module):
         self,
         input_size: int,
         hidden_size: int,
+        output_size: int,
         n_layers: int,
         rnn_type: str,
         dropout: float,
@@ -34,6 +35,7 @@ class Encoder(nn.Module):
     ) -> None:
         super().__init__()
         rnn_cell = self.available_rnns[rnn_type.lower()]
+        self.out_proj = nn.Linear(hidden_size << 1 if is_bidirectional else hidden_size, output_size)
 
         self.rnn = rnn_cell(
             input_size=input_size,
@@ -44,28 +46,22 @@ class Encoder(nn.Module):
             bidirectional=is_bidirectional,
         )
 
-    def forward(self, inputs: Tensor, input_lengths: Tensor):
-        """
-        Forward propagate a `inputs` for  encoder training.
+    def forward(self, inputs, input_lengths):
+        assert inputs.dim() == 3
 
-        Args:
-            inputs (torch.FloatTensor): A input sequence passed to encoder. Typically for inputs this will be a padded
-                `FloatTensor` of size ``(batch, seq_length, dimension)``.
-            input_lengths (torch.LongTensor): The length of input tensor. ``(batch)``
+        if input_lengths is not None:
+            sorted_seq_lengths, indices = torch.sort(input_lengths, descending=True)
+            inputs = inputs[indices]
+            inputs = nn.utils.rnn.pack_padded_sequence(inputs, sorted_seq_lengths.cpu(), batch_first=True)
 
-        Returns:
-            (Tensor, Tensor)
+        self.rnn.flatten_parameters()
+        outputs, hidden = self.rnn(inputs)
 
-            * outputs (torch.FloatTensor): A output sequence of encoder. `FloatTensor` of size
-                ``(batch, seq_length, dimension)``
-            * output_lengths (torch.LongTensor): The length of output tensor. ``(batch)``
-        """
-        inputs = nn.utils.rnn.pack_padded_sequence(
-            inputs,
-            input_lengths.cpu(),
-            enforce_sorted=False,
-            batch_first=True,
-        )
-        outputs, _ = self.rnn(inputs)
-        outputs, _ = nn.utils.rnn.pad_packed_sequence(outputs, batch_first=True)
-        return outputs, input_lengths
+        if input_lengths is not None:
+            _, desorted_indices = torch.sort(indices, descending=False)
+            outputs, _ = nn.utils.rnn.pad_packed_sequence(outputs, batch_first=True)
+            outputs = outputs[desorted_indices]
+
+        logits = self.out_proj(outputs)
+
+        return logits, hidden

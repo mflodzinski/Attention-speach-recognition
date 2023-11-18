@@ -1,13 +1,30 @@
-import torch
-from warp_rnnt import rnnt_loss
-# Check if CUDA (GPU) is available
-if torch.cuda.is_available():
-    print("CUDA (GPU) is available.")
-    # Additional information about the GPU(s)
-    print("GPU device count:", torch.cuda.device_count())
-    print("Current GPU device:", torch.cuda.current_device())
-    print("GPU device name:", torch.cuda.get_device_name(0))
-else:
-    print("CUDA (GPU) is not available.")
+import numpy as np
 
-print(len("she_had_your_dark_suit_in_greasy_wash_water_all_year"))
+from pathlib import Path
+from model import Model
+from tokenizer import CharTokenizer
+from utils import get_formated_date, load_stat_dict
+from torch.optim import Optimizer
+from data import DataLoader
+from typing import Callable, Union
+from torch.nn import Module
+from functools import wraps
+from hprams import hprams
+from tqdm import tqdm
+import torch
+import os
+from search import GreedyDecode
+from warprnnt_pytorch import RNNTLoss
+
+inputs = torch.from_numpy(np.load('inputs.npy')).to('cuda')
+inputs_len = torch.from_numpy(np.load('inputs_len.npy')).to('cuda')
+targets = torch.from_numpy(np.load('targets.npy')).to('cuda')
+targets_len = torch.from_numpy(np.load('targets_len.npy')).to('cuda')
+
+a = [1, 11, 10, 23,  5, 12,  2, 20, 23, 25, 30,  2, 13, 21,  2, 13, 25, 28,
+          2, 10,  7,  2, 24, 14,  7, 23, 20, 13,  5,  2, 26, 14,  2, 23, 20, 14,
+          7, 23,  5,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
+          0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
+          0,  0,  0,  0,  0]
+
+print(len(a))

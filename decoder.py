@@ -16,6 +16,7 @@ class Decoder(nn.Module):
         emb_dim: int,
         pad_idx: int,
         hidden_size: int,
+        output_size: int,
         n_layers: int,
         rnn_type: str,
         dropout: float,
@@ -25,7 +26,7 @@ class Decoder(nn.Module):
         self.hidden_size = hidden_size
 
         self.emb = nn.Embedding(vocab_size, emb_dim, padding_idx=pad_idx)
-        self.out_proj = nn.Linear(hidden_size, hidden_size)
+        self.out_proj = nn.Linear(hidden_size, output_size)
         rnn_cell = self.available_rnns.get(rnn_type.lower())
 
         self.rnn = rnn_cell(
@@ -36,30 +37,26 @@ class Decoder(nn.Module):
             dropout=dropout,
         )
 
-    def forward(
-        self,
-        inputs: torch.Tensor,
-        input_lengths: torch.Tensor = None,
-        hidden_states: Tuple[torch.Tensor, torch.Tensor] = None,
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
+    def forward(self, inputs, length=None, hidden=None):
+        embed_inputs = self.emb(inputs)
 
-        embedded = self.emb(inputs)
+        if length is not None:
+            sorted_seq_lengths, indices = torch.sort(length, descending=True)
+            embed_inputs = embed_inputs[indices]
+            embed_inputs = nn.utils.rnn.pack_padded_sequence(
+                embed_inputs, sorted_seq_lengths.cpu(), batch_first=True)
 
-        if input_lengths is not None:
-            embedded = nn.utils.rnn.pack_padded_sequence(
-                embedded,
-                input_lengths.cpu(),
-                enforce_sorted=False,
-                batch_first=True,
-            )
-            outputs, hidden_states = self.rnn(embedded, hidden_states)
+        self.rnn.flatten_parameters()
+        outputs, hidden = self.rnn(embed_inputs, hidden)
+
+        if length is not None:
+            _, desorted_indices = torch.sort(indices, descending=False)
             outputs, _ = nn.utils.rnn.pad_packed_sequence(outputs, batch_first=True)
-            outputs = self.out_proj(outputs)
-        else:
-            outputs, hidden_states = self.rnn(embedded, hidden_states)
-            outputs = self.out_proj(outputs)
-        return outputs, hidden_states
+            outputs = outputs[desorted_indices]
 
+        outputs = self.out_proj(outputs)
+
+        return outputs, hidden
 
     def get_zeros_hidden_state(
         self, batch_size: int, device: str

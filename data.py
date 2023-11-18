@@ -21,28 +21,29 @@ class BaseData:
     def _get_padded_aud(
         self,
         aud_path: Union[str, Path],
-        max_duration: int,
+        max_duration: float,
     ) -> Tensor:
         max_len = 1 + math.ceil(
-            max_duration * hprams.data.sampling_rate / hprams.data.hop_length
+            (max_duration * hprams.data.sampling_rate -hprams.data.n_ftt)/ hprams.data.hop_length
         )
         aud = self.prepare_audio(aud_path)
+
         n = max_len - aud.shape[1]
         zeros = torch.zeros(size=(1, n, aud.shape[-1]))
 
         return torch.cat([zeros, aud], dim=1), aud.shape[1]
 
-    def _get_padded_tokens(self, text: str, max_len:int) -> Tensor:
-        #max_len +=1
+    def _get_padded_tokens(self, text: str, max_len: int) -> Tensor:
         sos_idx = self.tokenizer.special_tokens[self.tokenizer._sos_key][1]
+        eos_idx = self.tokenizer.special_tokens[self.tokenizer._eos_key][1]
+        pad_idx = self.tokenizer.special_tokens[self.tokenizer._pad_key][1]
+
         text = self.prepare_text(text)
         tokens = self.tokenizer.tokens2ids(text)
-        #tokens = [sos_idx] + tokens
-        eos_idx = self.tokenizer.special_tokens[self.tokenizer._eos_key][1]
-        #tokens.append(eos_idx)
-        length = max_len - len(tokens)
-        pad_idx = self.tokenizer.special_tokens[self.tokenizer._pad_key][1]
-        tokens = tokens + [pad_idx] * length
+        num_tokens = len(tokens)
+        tokens = [sos_idx] + tokens + [eos_idx]
+        num_pad = max_len - num_tokens
+        tokens = tokens + [pad_idx] * num_pad
         return torch.IntTensor(tokens)
 
     def prepocess_lines(self, data: str) -> List[str]:
@@ -95,6 +96,7 @@ class DataLoader(BaseData):
 
     def get_audios(self, start_idx: int, end_idx: int) -> Tensor:
         max_duration = self.get_max_duration(start_idx, end_idx)
+        #print(start_idx, end_idx)
         results = [
             self._get_padded_aud(path, max_duration)
             for path in self.df[hprams.data.csv_file_keys.path].iloc[start_idx:end_idx]
@@ -118,3 +120,20 @@ class DataLoader(BaseData):
             end = min((self.idx + 1) * self.batch_size, self.num_examples)
             self.idx += 1
             yield *self.get_audios(start, end), *self.get_texts(start, end)
+
+
+if __name__=='__main__':
+    from tokenizer import JSONLoader
+    path = 'files/train.csv'
+    tokenizer_class =  JSONLoader('files/tokenizer.json')
+    tokenizer = tokenizer_class.load()
+    dataloader = DataLoader(path, tokenizer, 2, 120)
+    max_len = dataloader.get_max_duration(2,3)
+    # print(max_len)
+    max_duration=4.729625
+    max_len = 1 + math.ceil(
+            (max_duration * hprams.data.sampling_rate -hprams.data.n_ftt)/ hprams.data.hop_length
+        )
+    print(max_len)
+    a = BaseData(tokenizer, 120)
+    print(a.prepare_audio('data/TRAIN/DR4/FPAF0/SA1.WAV').shape)

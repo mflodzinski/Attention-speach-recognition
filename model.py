@@ -62,10 +62,10 @@ class Model(nn.Module):
             * predictions (torch.FloatTensor): Result of model predictions.
         """
         encoder_outputs, _ = self.encoder(inputs, input_lengths)
-        concat_targets = F.pad(targets, pad=(1, 0, 0, 0), value=3)
+        concat_targets = F.pad(targets, pad=(1, 0, 0, 0), value=self.phi_idx)
         decoder_outputs, _ = self.decoder(concat_targets, target_lengths.add(1))
         outputs = self.joint(encoder_outputs, decoder_outputs)
-        outputs = torch.nn.functional.log_softmax(outputs, dim=-1)
+        #print(outputs)
         return outputs
 
     # def forward(self, x: Tensor, max_length: int) -> Tensor:
@@ -180,8 +180,8 @@ class Model(nn.Module):
         num_windows = max_size
         return torch.arange(0, batch_size * num_windows, num_windows) + num_windows - 1
 
-    def init_prev_preds(self, batch_size: int) -> Tensor:
-        return torch.LongTensor([[self.sos_idx]] * batch_size).to(self.device)
+    # def init_prev_preds(self, batch_size: int) -> Tensor:
+    #     return torch.LongTensor([[self.sos_idx]] * batch_size).to(self.device)
 
     def init_counter(self, batch_size: int, max_size: int) -> Tensor:
         num_windows = max_size

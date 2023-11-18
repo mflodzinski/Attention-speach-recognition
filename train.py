@@ -11,8 +11,8 @@ from hprams import hprams
 from tqdm import tqdm
 import torch
 import os
-from warp_rnnt import rnnt_loss
 from search import GreedyDecode
+from warprnnt_pytorch import RNNTLoss
 
 OPT = {"sgd": torch.optim.SGD}
 
@@ -67,8 +67,8 @@ class Trainer:
         data then test it on the test set and then log the results
         """
         for _ in range(self.epochs):
-            #self.train()
-            self.test()
+            self.train()
+            #self.test()
             self.print_results()
 
     def set_train_mode(self) -> None:
@@ -92,9 +92,8 @@ class Trainer:
         """
         total_loss = 0
         self.set_test_mode()
-        for x, x_len, y, ylen in tqdm(self.test_loader):
+        for x, x_len, y, ylen in tqdm(self.train_loader):
             x = x.to(self.device); x_len = x_len.to(self.device)
-            print(y.size())
             #print(self.tokenizer.ids2tokens(y.tolist()))
             search = GreedyDecode(self.model, x, x_len) 
             search = self.tokenizer.ids2tokens(search)
@@ -127,21 +126,31 @@ class Trainer:
             inputs, targets = inputs.to(self.device), targets.to(self.device)
             inputs_len, targets_len = inputs_len.to(self.device), targets_len.to(self.device)
             inputs = torch.squeeze(inputs, dim=1)
-                
             self.optimizer.zero_grad()
-            output_probs = self.model(inputs, inputs_len, targets, targets_len)
-            print(output_probs.size)
-            a = output_probs.argmax(dim=-1)
-            print(a.size())
-
+            
+            output_probs = self.model(inputs, inputs_len, targets, targets_len)            
             loss = self.criterion(
                 output_probs, targets, inputs_len, targets_len
             )
-
             print(loss)
             print(loss.mean())
+            for idx, l in enumerate(loss):
+                if l < 0:
+                    print(idx)
+                    # import numpy as np
+                    # ip = 'inputs'
+                    # ip_len = "inputs_len"
+                    # t = 'targets'
+                    # t_len = "targets_len"
+                    # np.save(ip, inputs.cpu().numpy())
+                    # np.save(ip_len, inputs_len.cpu().numpy())
+                    # np.save(t, targets.cpu().numpy())
+                    # np.save(t_len, targets_len.cpu().numpy())
+                    # return 
+
+
             loss.mean().backward()
-            torch.nn.utils.clip_grad_norm_(self.model.parameters(), 8)
+            torch.nn.utils.clip_grad_norm_(self.model.parameters(), 100)
 
             self.optimizer.step()
             total_loss += loss.mean().item()
@@ -200,7 +209,7 @@ def get_trainer():
     vocab_size = tokenizer.vocab_size()
     train_loader = get_data_loader(hprams.data.training_file, tokenizer)
     test_loader = get_data_loader(hprams.data.testing_file, tokenizer)
-    criterion = rnnt_loss
+    criterion = RNNTLoss(reduction='none', blank=phi_idx)
     model = load_model(vocab_size, pad_idx=pad_idx, phi_idx=phi_idx, sos_idx=sos_idx)
     optimizer = OPT[hprams.training.optimizer](
         model.parameters(),
@@ -223,3 +232,32 @@ def get_trainer():
 if __name__ == "__main__":
     trainer = get_trainer()
     trainer.fit()
+#     import numpy as np
+
+#     from pathlib import Path
+#     from model import Model
+#     from tokenizer import CharTokenizer
+#     from utils import get_formated_date, load_stat_dict
+#     from torch.optim import Optimizer
+#     from data import DataLoader
+#     from typing import Callable, Union
+#     from torch.nn import Module
+#     from functools import wraps
+#     from hprams import hprams
+#     from tqdm import tqdm
+#     import torch
+#     import os
+#     from search import GreedyDecode
+#     from warprnnt_pytorch import RNNTLoss
+
+#     inputs = torch.from_numpy(np.load('inputs.npy')).to('cuda')
+#     inputs_len = torch.from_numpy(np.load('inputs_len.npy')).to('cuda')
+#     targets = torch.from_numpy(np.load('targets.npy')).to('cuda')
+#     targets_len = torch.from_numpy(np.load('targets_len.npy')).to('cuda')
+#     output_probs = trainer.model(inputs, inputs_len, targets, targets_len)
+#     loss_fun = RNNTLoss(reduction='none')
+#     loss = loss_fun(
+#     output_probs, targets, inputs_len, targets_len
+# )
+#     print(loss)
+#     print(output_probs)

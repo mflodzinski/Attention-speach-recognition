@@ -1,4 +1,4 @@
-checkpoint: 'checkpoints/final.pt'
+checkpoint: null
 device: "cuda"
 length_multiplier: 1.05
 
@@ -13,7 +13,7 @@ data:
   n_ftt: 400
   training_file: "files/train.csv"
   testing_file: "files/test.csv"
-  max_str_len: 100
+  max_str_len: 250
   descending_order: False
   sep: "_"
   csv_file_keys:
@@ -25,15 +25,16 @@ training:
   checkpoints_dir: "checkpoints"
   batch_size: 12
   optimizer: "sgd"
-  epochs: 100
+  epochs: 40
   optim:
-    learning_rate: 0.01
+    learning_rate: 0.002
     momentum: 0.9
 
 model:
   decoder:
     emb_dim: 64
-    hidden_size: 256
+    hidden_size: 128
+    output_size: 256
     n_layers: 1
     dropout: 0.1
     rnn_type: "lstm"
@@ -44,7 +45,8 @@ model:
     dropout: 0.1
     is_bidirectional: True
     hidden_size: 128 # half pred_net hidden_size if bidirectional
+    output_size: 256
     rnn_type: "lstm"
 
   joint:
-    input_size: 512
+    input_size: 256

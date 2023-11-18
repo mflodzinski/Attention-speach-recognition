@@ -8,7 +8,7 @@ def GreedyDecode(model, inputs, input_lengths):
     # f = [batch_size, time_step, feature_dim]
     f, _ = model.encoder(inputs, input_lengths)
 
-    zero_token = torch.LongTensor([[3]])
+    zero_token = torch.LongTensor([[1]])
     if inputs.is_cuda:
         zero_token = zero_token.cuda()
     results = []
@@ -23,12 +23,12 @@ def GreedyDecode(model, inputs, input_lengths):
             pred = torch.argmax(out, dim=-1)
             pred = int(pred)
             #print(pred == 0)
-            if pred != 0 or True:
+            if pred != 1:
                 token_list.append(pred)
                 token = torch.LongTensor([[pred]])
                 if zero_token.is_cuda:
                     token = token.cuda()
-                gu, hidden = model.decoder(token, hidden_states=hidden)
+                gu, hidden = model.decoder(token, hidden=hidden)
 
         return token_list
 
